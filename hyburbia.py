@@ -51,17 +51,20 @@ class Card:
 class Skill:
     costs = {
         'Focus': {'B': 2},
-        'Maneuver': {'G': 2}
+        'Maneuver': {'G': 2},
+        'Resist': {'R': 2}
     }
 
     affinities = {
         'Focus': 'Intelligence',
-        'Maneuver': 'Dexterity'
+        'Maneuver': 'Dexterity',
+        'Resist': 'Stamina'
     }
 
     effects = {
         'Focus': {'draw': 2},
-        'Maneuver': {'react': 2}
+        'Maneuver': {'react': 2},
+        'Resist': {'heal': 2}
     }
 
     def __init__(self, name):
@@ -111,8 +114,16 @@ class Skill:
                     for r in to_remove:
                         deck.hand.remove(r)
                     deck.draw(self.effect[e])
+                if e == 'heal':
+                    to_remove = []
+                    for n in cards[:self.effect[e]]:
+                        c = deck.hand[n]
+                        if c.type == 'status':
+                            to_remove.append(c)
+                    for r in to_remove:
+                        deck.hand.remove(r)
         self.cards = []
-                    
+
 
 class Deck:
     def __init__(self):
@@ -163,7 +174,7 @@ class Deck:
 
 if __name__ == '__main__':
     deck = Deck()
-    skills = [Skill('Focus'), Skill('Maneuver')]
+    skills = [Skill('Focus'), Skill('Maneuver'), Skill('Resist')]
     turn = 1
     i = ''
     while deck.refresh_hand():
@@ -178,8 +189,14 @@ if __name__ == '__main__':
                 break
             if i[0] == 's':
                 if len(i) == 1:
-                    for s in skills:
-                        print(f'{s.name} ({s.cost_text(s.cost)}) : {s.cost_text(s.paid())} {s.is_paid()}')
+                    for s in range(len(skills)):
+                        print(
+                            f'{s+1}: ',
+                            f'{skills[s].name} ',
+                            f'({skills[s].cost_text(skills[s].cost)}) ',
+                            f'[{skills[s].cost_text(skills[s].paid())}] ',
+                            f"{'PAID' if skills[s].is_paid() else ''}"
+                            )
                 else:
                     sp = i[1:].split('c')
                     cards = []
