@@ -1,77 +1,42 @@
 from random import shuffle
+from re import S
 from tkinter import E
 
 
 class Card:
     types = {
-        'Strength':'attribute',
-        'Stamina':'attribute',
-        'Speed':'attribute',
-        'Quickness':'attribute',
-        'Dexterity':'attribute',
-        'Perception':'attribute',
-        'Intelligence':'attribute',
-        'Cunning':'attribute',
-        'Luck':'attribute',
-        'Fatigue':'status'
-    }
-
-    short_name = {
-        'Strength':'Str',
-        'Stamina':'Sta',
-        'Speed':'Spd',
-        'Quickness':'Qck',
-        'Dexterity':'Dex',
-        'Perception':'Per',
-        'Intelligence':'Int',
-        'Cunning':'Cun',
-        'Luck':'Luc',
-        'Fatigue':'Fat'
-    }
-
-    colors = {
-        'Strength': 'R',
-        'Stamina': 'R',
-        'Speed': 'Y',
-        'Quickness': 'Y',
-        'Dexterity': 'G',
-        'Perception': 'G',
-        'Intelligence': 'B',
-        'Cunning': 'B',
-        'Luck': 'P'
+        'Strength': ['attribute','Str','R'],
+        'Stamina': ['attribute','Sta','R'],
+        'Speed': ['attribute','Spd','Y'],
+        'Quickness': ['attribute','Qck','Y'],
+        'Dexterity': ['attribute','Dex','G'],
+        'Perception': ['attribute','Per','G'],
+        'Intelligence': ['attribute','Int','B'],
+        'Cunning': ['attribute','Cun','B'],
+        'Luck': ['attribute','Luc','P'],
+        'Fatigue': ['status','Fat',''],
     }
 
     def __init__(self, name):
         self.name = name
-        self.type = Card.types[name]
-        self.short = Card.short_name[name]
-        self.color = Card.colors.get(name, '')
+        self.type = Card.types[name][0]
+        self.short = Card.types[name][1]
+        self.color = Card.types[name][2]
 
 
 class Skill:
-    costs = {
-        'Focus': {'B': 2},
-        'Maneuver': {'G': 2},
-        'Resist': {'R': 2}
-    }
-
-    affinities = {
-        'Focus': 'Intelligence',
-        'Maneuver': 'Dexterity',
-        'Resist': 'Stamina'
-    }
-
-    effects = {
-        'Focus': {'draw': 2},
-        'Maneuver': {'react': 2},
-        'Resist': {'heal': 2}
+    types = {
+        'Focus': [{'B': 2},'Intelligence',{'draw': 2}],
+        'Maneuver': [{'G': 2},'Dexterity',{'react': 2}],
+        'Resist': [{'R': 2},'Stamina',{'heal': 2}],
+        'Plan': [{'B': 2}, 'Cunning', {'keep': 2}]
     }
 
     def __init__(self, name):
         self.name = name
-        self.cost = Skill.costs[name]
-        self.affinity = Skill.affinities[name]
-        self.effect = Skill.effects[name]
+        self.cost = Skill.types[name][0]
+        self.affinity = Skill.types[name][1]
+        self.effect = Skill.types[name][2]
         self.cards = []
 
     def paid(self):
@@ -83,7 +48,7 @@ class Skill:
         }
         for c in self.cards:
             if c.color == 'P':
-                p[Card.colors[self.affinity]] += 2
+                p[Card.types[self.affinity][2]] += 2
                 continue
             p[c.color] += 1
             if c.name == self.affinity:
@@ -122,6 +87,14 @@ class Skill:
                             to_remove.append(c)
                     for r in to_remove:
                         deck.hand.remove(r)
+                if e == 'keep':
+                    to_remove = []
+                    for n in cards[:self.effect[e]]:
+                        c = deck.hand[n]
+                        to_remove.append(c)
+                    for r in to_remove:
+                        deck.hand.remove(r)
+                        deck.cards.insert(0, r)
         self.cards = []
 
 
@@ -172,42 +145,61 @@ class Deck:
             )
 
 
+class Player:
+    def __init__(self):
+        self.deck = Deck()
+        self.skills = [
+            Skill('Focus'),
+            Skill('Maneuver'),
+            Skill('Resist'),
+            Skill('Plan')
+        ]
+
+    def refresh_skills(self):
+        for s in self.skills:
+            s.cards = []
+
+    def display_skills(self):
+        for s in range(len(self.skills)):
+            print(
+                f'    {s+1}: ',
+                f'{self.skills[s].name} ',
+                f'({self.skills[s].cost_text(self.skills[s].cost)}) ',
+                f'[{self.skills[s].cost_text(self.skills[s].paid())}] ',
+                f"{'PAID' if self.skills[s].is_paid() else ''}"
+                )
+
+    def is_dead(self):
+        if len([x for x in self.deck.hand if x.type == 'status']) >= 5:
+            return True
+        return False
+
+
 if __name__ == '__main__':
-    deck = Deck()
-    skills = [Skill('Focus'), Skill('Maneuver'), Skill('Resist')]
+    p = Player()
     turn = 1
     i = ''
-    while deck.refresh_hand():
+    while not p.is_dead():
         if i == 'q':
             break
-        for s in skills:
-            s.cards = []
-        while True:
-            deck.display(turn)
+        p.deck.refresh_hand()
+        p.refresh_skills()
+        while not p.is_dead():
+            p.deck.display(turn)
             i = input('Action: ')
             if i in 'qe':
                 break
             if i[0] == 's':
                 if len(i) == 1:
-                    for s in range(len(skills)):
-                        print(
-                            f'{s+1}: ',
-                            f'{skills[s].name} ',
-                            f'({skills[s].cost_text(skills[s].cost)}) ',
-                            f'[{skills[s].cost_text(skills[s].paid())}] ',
-                            f"{'PAID' if skills[s].is_paid() else ''}"
-                            )
+                    p.display_skills()
                 else:
                     sp = i[1:].split('c')
                     cards = []
                     if 'c' in i:
                         cards = [int(x)-1 for x in sp[1]]
-                    skills[int(sp[0])-1].activate(deck, cards)
+                    p.skills[int(sp[0])-1].activate(p.deck, cards)
             if i[0] == 'p':
                 sp = i[1:].split('s')
-                deck.play_card(int(sp[0])-1, skills[int(sp[1])-1])
+                p.deck.play_card(int(sp[0])-1, p.skills[int(sp[1])-1])
         turn += 1
     print('You died.')
-
-
-
