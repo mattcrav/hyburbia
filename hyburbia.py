@@ -15,6 +15,7 @@ class Card:
         'Cunning': ['attribute','Cun','B'],
         'Luck': ['attribute','Luc','P'],
         'Fatigue': ['status','Fat',''],
+        'Wound': ['status','Wnd','']
     }
 
     def __init__(self, name):
@@ -29,7 +30,8 @@ class Skill:
         'Focus': [{'B': 2},'Intelligence',{'draw': 2}],
         'Maneuver': [{'G': 2},'Dexterity',{'react': 2}],
         'Resist': [{'R': 2},'Stamina',{'heal': 2}],
-        'Plan': [{'B': 2}, 'Cunning', {'keep': 2}]
+        'Plan': [{'B': 2}, 'Cunning', {'keep': 2}],
+        'Strike': [{'R': 2}, 'Strength', {'damage': 2}]
     }
 
     def __init__(self, name):
@@ -65,38 +67,61 @@ class Skill:
                 return False
         return True
 
-    def activate(self, deck, cards):
+    def activate(self, player, cards):
         if self.is_paid():
             for e in self.effect:
                 if e == 'draw':
-                    deck.draw(self.effect[e])
+                    player.deck.draw(self.effect[e])
                 if e == 'react':
                     to_remove = []
                     for n in cards[:self.effect[e]]:
-                        c = deck.hand[n]
+                        c = player.deck.hand[n]
                         to_remove.append(c)
-                    deck.discard += to_remove
+                    player.deck.discard += to_remove
                     for r in to_remove:
-                        deck.hand.remove(r)
-                    deck.draw(self.effect[e])
+                        player.deck.hand.remove(r)
+                    player.deck.draw(self.effect[e])
                 if e == 'heal':
                     to_remove = []
                     for n in cards[:self.effect[e]]:
-                        c = deck.hand[n]
+                        c = player.deck.hand[n]
                         if c.type == 'status':
                             to_remove.append(c)
                     for r in to_remove:
-                        deck.hand.remove(r)
+                        player.deck.hand.remove(r)
                 if e == 'keep':
                     to_remove = []
                     for n in cards[:self.effect[e]]:
-                        c = deck.hand[n]
+                        c = player.deck.hand[n]
                         to_remove.append(c)
                     for r in to_remove:
-                        deck.hand.remove(r)
-                        deck.cards.insert(0, r)
+                        player.deck.hand.remove(r)
+                        player.deck.cards.insert(0, r)
+                if e == 'damage':
+                    player.damage += self.effect[e]
         self.cards = []
 
+
+class Enemy:
+    types = {
+        'Skate Punk': {'health':3, 'range':1, 'damage':2}
+    }
+
+    def __init__(self, name):
+        self.name = name
+        self.health = Enemy.types[name]['health']
+        self.range = Enemy.types[name]['range']
+        self.damage = Enemy.types[name]['damage']
+        self.distance = 1
+
+    def take_hit(self, player):
+        if player.range >= self.distance:
+            self.health -= player.damage
+
+    def attack(self, player):
+        if self.range >= self.distance:
+            for i in range(self.damage):
+                player.take_hit('Wound')
 
 class Deck:
     def __init__(self):
@@ -136,38 +161,64 @@ class Deck:
         self.discard.append(c)
         skill.cards.append(c)
 
-    def display(self, turn):
-        print(
-            str(turn) + ' ' * (5-len(str(turn))), 
-            f'Hand: {[x.short for x in self.hand]}', 
-            f'Deck: {len(self.cards)}' + ' ' * (5-len(str(len(self.cards)))), 
-            f'Discard: {len(self.discard)}' + ' ' * (5-len(str(len(self.discard))))
-            )
-
 
 class Player:
     def __init__(self):
         self.deck = Deck()
+        self.range = 1
+        self.damage = 0
+        self.death_message = 'You died'
         self.skills = [
             Skill('Focus'),
             Skill('Maneuver'),
             Skill('Resist'),
-            Skill('Plan')
+            Skill('Plan'),
+            Skill('Strike')
         ]
+        self.enemies = [Enemy('Skate Punk')]
 
     def refresh_skills(self):
         for s in self.skills:
             s.cards = []
 
+    def refresh_stats(self):
+        self.range = 1
+        self.damage = 0
+
+    def take_hit(self, type):
+        if type == 'Wound':
+            self.deck.cards.append(Card('Wound'))
+            shuffle(self.deck.cards)
+
     def display_skills(self):
         for s in range(len(self.skills)):
             print(
-                f'    {s+1}: ',
+                f'        {s+1}: ',
                 f'{self.skills[s].name} ',
                 f'({self.skills[s].cost_text(self.skills[s].cost)}) ',
                 f'[{self.skills[s].cost_text(self.skills[s].paid())}] ',
                 f"{'PAID' if self.skills[s].is_paid() else ''}"
                 )
+
+    def display_enemies(self):
+        for s in range(len(self.enemies)):
+            print(
+                f'        {s+1}: ',
+                f'{self.enemies[s].name} ({self.enemies[s].distance})',
+                f'Health: {self.enemies[s].health} ',
+                f'Damage: {self.enemies[s].damage} ',
+                f'Range: {self.enemies[s].range} ',
+                )
+
+    def display(self, turn):
+        print(
+            str(turn) + ' ' * (5-len(str(turn))), 
+            f'Hand: {[x.short for x in self.deck.hand]} ', 
+            f'Deck: {len(self.deck.cards)} ', 
+            f'Discard: {len(self.deck.discard)} ',
+            f'Damage: {self.damage} ',
+            f'Range: {self.range} '
+            )
 
     def is_dead(self):
         if len([x for x in self.deck.hand if x.type == 'status']) >= 5:
@@ -177,17 +228,21 @@ class Player:
 
 if __name__ == '__main__':
     p = Player()
-    turn = 1
+    turn = 0
     i = ''
     while not p.is_dead():
+        turn += 1
         if i == 'q':
             break
         p.deck.refresh_hand()
         p.refresh_skills()
+        p.refresh_stats()
         while not p.is_dead():
-            p.deck.display(turn)
-            i = input('Action: ')
+            p.display(turn)
+            i = input('    Action: ')
             if i in 'qe':
+                for e in p.enemies:
+                    e.attack(p)
                 break
             if i[0] == 's':
                 if len(i) == 1:
@@ -197,9 +252,17 @@ if __name__ == '__main__':
                     cards = []
                     if 'c' in i:
                         cards = [int(x)-1 for x in sp[1]]
-                    p.skills[int(sp[0])-1].activate(p.deck, cards)
+                    p.skills[int(sp[0])-1].activate(p, cards)
             if i[0] == 'p':
                 sp = i[1:].split('s')
                 p.deck.play_card(int(sp[0])-1, p.skills[int(sp[1])-1])
-        turn += 1
-    print('You died.')
+            if i[0] == 'm':
+                if len(i) == 1:
+                    p.display_enemies()
+                else:
+                    sp = i[1:].split('s')
+                    p.enemies[int(sp[0])-1].take_hit(p)
+                    p.refresh_stats()
+    if i[0] != 'q':
+        p.display(turn)
+        print(p.death_message)
