@@ -31,7 +31,8 @@ class Skill:
         'Maneuver': [{'G': 2},'Dexterity',{'react': 2}],
         'Resist': [{'R': 2},'Stamina',{'heal': 2}],
         'Plan': [{'B': 2}, 'Cunning', {'keep': 2}],
-        'Strike': [{'R': 2}, 'Strength', {'damage': 2}]
+        'Strike': [{'R': 2}, 'Strength', {'damage': 2}],
+        'Dodge': [{'Y': 2}, 'Quickness', {'block': 2}],
     }
 
     def __init__(self, name):
@@ -40,6 +41,7 @@ class Skill:
         self.affinity = Skill.types[name][1]
         self.effect = Skill.types[name][2]
         self.cards = []
+        self.used = False
 
     def paid(self):
         p = {
@@ -99,7 +101,10 @@ class Skill:
                         player.deck.cards.insert(0, r)
                 if e == 'damage':
                     player.damage += self.effect[e]
+                if e == 'block':
+                    player.block += self.effect[e]
         self.cards = []
+        self.used = True
 
 
 class Enemy:
@@ -120,7 +125,9 @@ class Enemy:
 
     def attack(self, player):
         if self.range >= self.distance:
-            for i in range(self.damage):
+            d = max(self.damage - player.block, 0)
+            player.block = max(player.block - self.damage, 0)
+            for i in range(d):
                 player.take_hit('Wound')
 
 class Deck:
@@ -157,9 +164,10 @@ class Deck:
         return True
 
     def play_card(self, n, skill):
-        c = self.hand.pop(n)
-        self.discard.append(c)
-        skill.cards.append(c)
+        if not skill.used:
+            c = self.hand.pop(n)
+            self.discard.append(c)
+            skill.cards.append(c)
 
 
 class Player:
@@ -167,23 +175,27 @@ class Player:
         self.deck = Deck()
         self.range = 1
         self.damage = 0
+        self.block = 0
         self.death_message = 'You died'
         self.skills = [
             Skill('Focus'),
             Skill('Maneuver'),
             Skill('Resist'),
             Skill('Plan'),
-            Skill('Strike')
+            Skill('Strike'),
+            Skill('Dodge')
         ]
         self.enemies = [Enemy('Skate Punk')]
 
     def refresh_skills(self):
         for s in self.skills:
             s.cards = []
+            s.used = False
 
     def refresh_stats(self):
         self.range = 1
         self.damage = 0
+        self.block = 0
 
     def take_hit(self, type):
         if type == 'Wound':
@@ -197,7 +209,7 @@ class Player:
                 f'{self.skills[s].name} ',
                 f'({self.skills[s].cost_text(self.skills[s].cost)}) ',
                 f'[{self.skills[s].cost_text(self.skills[s].paid())}] ',
-                f"{'PAID' if self.skills[s].is_paid() else ''}"
+                f"{'PAID' if self.skills[s].is_paid() else 'USED' if self.skills[s].used else ''}"
                 )
 
     def display_enemies(self):
@@ -217,7 +229,8 @@ class Player:
             f'Deck: {len(self.deck.cards)} ', 
             f'Discard: {len(self.deck.discard)} ',
             f'Damage: {self.damage} ',
-            f'Range: {self.range} '
+            f'Range: {self.range} ',
+            f'Block: {self.block} '
             )
 
     def is_dead(self):
@@ -262,7 +275,8 @@ if __name__ == '__main__':
                 else:
                     sp = i[1:].split('s')
                     p.enemies[int(sp[0])-1].take_hit(p)
-                    p.refresh_stats()
+                    p.damage = 0
+                    p.range = 1
     if i[0] != 'q':
         p.display(turn)
         print(p.death_message)
