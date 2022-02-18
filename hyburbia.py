@@ -1,6 +1,5 @@
 from random import shuffle
-from re import S
-from tkinter import E
+import numpy as np
 
 
 class Card:
@@ -29,6 +28,7 @@ class Skill:
     types = {
         'Strike': [{'R': 2}, 'Strength', {'damage': 2}],
         'Resist': [{'R': 2}, 'Stamina', {'heal': 2}],
+        'Walk': [{'Y': 2}, 'Speed', {'move': 2}],
         'Dodge': [{'Y': 2}, 'Quickness', {'block': 2}],
         'Maneuver': [{'G': 2}, 'Dexterity', {'react': 2}],
         'Aim': [{'G': 2}, 'Perception', {'range': 2}],
@@ -106,6 +106,8 @@ class Skill:
                     player.block += self.effect[e]
                 if e == 'range':
                     player.range += self.effect[e]
+                if e == 'move':
+                    player.move += self.effect[e]
         self.cards = []
         self.used = True
 
@@ -116,12 +118,13 @@ class Enemy:
         'Air Soft Punk': {'health':2, 'range':3, 'damage':2}
     }
 
-    def __init__(self, name, dist=1):
+    def __init__(self, name, pos):
         self.name = name
         self.health = Enemy.types[name]['health']
         self.range = Enemy.types[name]['range']
         self.damage = Enemy.types[name]['damage']
-        self.distance = dist
+        self.pos = pos
+        self.distance = 0
 
     def take_hit(self, player):
         if player.range >= self.distance:
@@ -184,10 +187,13 @@ class Player:
         self.range = 1
         self.damage = 0
         self.block = 0
+        self.move = 0
+        self.pos = [5,5]
         self.death_message = 'You died'
         self.skills = [
             Skill('Strike'),
             Skill('Resist'),
+            Skill('Walk'),
             Skill('Dodge'),
             Skill('Maneuver'),
             Skill('Aim'),
@@ -195,9 +201,10 @@ class Player:
             Skill('Plan'),   
         ]
         self.enemies = [
-            Enemy('Skate Punk'),
-            Enemy('Air Soft Punk', 3)
+            Enemy('Skate Punk', [0, 0]),
+            Enemy('Air Soft Punk', [10, 10])
         ]
+        self.set_dist()
 
     def refresh_skills(self):
         for s in self.skills:
@@ -208,11 +215,29 @@ class Player:
         self.range = 1
         self.damage = 0
         self.block = 0
+        self.move = 0
 
     def take_hit(self, type):
         if type == 'Wound':
             self.deck.cards.append(Card('Wound'))
             shuffle(self.deck.cards)
+
+    def go(self, dir):
+        if self.move == 0:
+            return
+        if dir == 'w':
+            self.pos[0] -= 1
+        if dir == 'a':
+            self.pos[1] -= 1
+        if dir == 's':
+            self.pos[0] += 1
+        if dir == 'd':
+            self.pos[1] += 1
+        self.move -= 1
+
+    def set_dist(self):
+        for e in self.enemies:
+            e.distance = abs(self.pos[0] - e.pos[0]) + abs(self.pos[1] - e.pos[1])
 
     def display_skills(self):
         for s in range(len(self.skills)):
@@ -234,6 +259,14 @@ class Player:
                 f'Range: {self.enemies[s].range} ',
                 )
 
+    def display_map(self, map):
+        map.fill('.')
+        map[self.pos[0], self.pos[1]] = 'P'
+        for e in range(len(self.enemies)):
+            map[self.enemies[e].pos[0], self.enemies[e].pos[1]] = e + 1
+        for el in map:
+            print(' '.join(el.astype(str)))
+
     def display(self, turn):
         print(
             str(turn) + ' ' * (5-len(str(turn))), 
@@ -242,7 +275,8 @@ class Player:
             f'Discard: {len(self.deck.discard)} ',
             f'Damage: {self.damage} ',
             f'Range: {self.range} ',
-            f'Block: {self.block} '
+            f'Block: {self.block} ',
+            f'Move: {self.move} '
             )
 
     def is_dead(self):
@@ -253,6 +287,7 @@ class Player:
 
 if __name__ == '__main__':
     p = Player()
+    map = np.empty([11, 11], str)
     turn = 0
     i = ''
     while not p.is_dead():
@@ -262,6 +297,7 @@ if __name__ == '__main__':
         p.deck.refresh_hand()
         p.refresh_skills()
         p.refresh_stats()
+        p.display_map(map)
         while not p.is_dead():
             p.display(turn)
             i = input('    Action: ')
@@ -269,7 +305,7 @@ if __name__ == '__main__':
                 for e in p.enemies:
                     e.attack(p)
                 break
-            if i[0] == 's':
+            if i[0] == 'k':
                 if len(i) == 1:
                     p.display_skills()
                 else:
@@ -279,16 +315,20 @@ if __name__ == '__main__':
                         cards = [int(x)-1 for x in sp[1]]
                     p.skills[int(sp[0])-1].activate(p, cards)
             if i[0] == 'p':
-                sp = i[1:].split('s')
+                sp = i[1:].split('k')
                 p.deck.play_card(int(sp[0])-1, p.skills[int(sp[1])-1])
             if i[0] == 'm':
                 if len(i) == 1:
                     p.display_enemies()
                 else:
-                    sp = i[1:].split('s')
+                    sp = i[1:].split('k')
                     if p.enemies[int(sp[0])-1].take_hit(p):
                         p.damage = 0
                         p.range = 1
+            if i[0] in 'wasd':
+                p.go(i[0])
+                p.display_map(map)
+                p.set_dist()
     if i[0] != 'q':
         p.display(turn)
         print(p.death_message)
