@@ -27,12 +27,13 @@ class Card:
 
 class Skill:
     types = {
-        'Focus': [{'B': 2},'Intelligence',{'draw': 2}],
-        'Maneuver': [{'G': 2},'Dexterity',{'react': 2}],
-        'Resist': [{'R': 2},'Stamina',{'heal': 2}],
-        'Plan': [{'B': 2}, 'Cunning', {'keep': 2}],
         'Strike': [{'R': 2}, 'Strength', {'damage': 2}],
+        'Resist': [{'R': 2}, 'Stamina', {'heal': 2}],
         'Dodge': [{'Y': 2}, 'Quickness', {'block': 2}],
+        'Maneuver': [{'G': 2}, 'Dexterity', {'react': 2}],
+        'Aim': [{'G': 2}, 'Perception', {'range': 2}],
+        'Focus': [{'B': 2}, 'Intelligence', {'draw': 2}],
+        'Plan': [{'B': 2}, 'Cunning', {'keep': 2}],
     }
 
     def __init__(self, name):
@@ -103,25 +104,32 @@ class Skill:
                     player.damage += self.effect[e]
                 if e == 'block':
                     player.block += self.effect[e]
+                if e == 'range':
+                    player.range += self.effect[e]
         self.cards = []
         self.used = True
 
 
 class Enemy:
     types = {
-        'Skate Punk': {'health':3, 'range':1, 'damage':2}
+        'Skate Punk': {'health':3, 'range':1, 'damage':2},
+        'Air Soft Punk': {'health':2, 'range':3, 'damage':2}
     }
 
-    def __init__(self, name):
+    def __init__(self, name, dist=1):
         self.name = name
         self.health = Enemy.types[name]['health']
         self.range = Enemy.types[name]['range']
         self.damage = Enemy.types[name]['damage']
-        self.distance = 1
+        self.distance = dist
 
     def take_hit(self, player):
         if player.range >= self.distance:
             self.health -= player.damage
+            if self.health <= 0:
+                player.enemies.remove(self)
+            return True
+        return False
 
     def attack(self, player):
         if self.range >= self.distance:
@@ -178,14 +186,18 @@ class Player:
         self.block = 0
         self.death_message = 'You died'
         self.skills = [
-            Skill('Focus'),
-            Skill('Maneuver'),
-            Skill('Resist'),
-            Skill('Plan'),
             Skill('Strike'),
-            Skill('Dodge')
+            Skill('Resist'),
+            Skill('Dodge'),
+            Skill('Maneuver'),
+            Skill('Aim'),
+            Skill('Focus'),           
+            Skill('Plan'),   
         ]
-        self.enemies = [Enemy('Skate Punk')]
+        self.enemies = [
+            Enemy('Skate Punk'),
+            Enemy('Air Soft Punk', 3)
+        ]
 
     def refresh_skills(self):
         for s in self.skills:
@@ -274,9 +286,9 @@ if __name__ == '__main__':
                     p.display_enemies()
                 else:
                     sp = i[1:].split('s')
-                    p.enemies[int(sp[0])-1].take_hit(p)
-                    p.damage = 0
-                    p.range = 1
+                    if p.enemies[int(sp[0])-1].take_hit(p):
+                        p.damage = 0
+                        p.range = 1
     if i[0] != 'q':
         p.display(turn)
         print(p.death_message)
