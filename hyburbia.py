@@ -1,4 +1,5 @@
 from random import shuffle
+from tkinter import Y
 import numpy as np
 import os
 
@@ -143,15 +144,11 @@ class Enemy:
             y = np.sign(player.pos[0] - self.pos[0])
             r = ['x', 'y']
             shuffle(r)
-            if r[0] == 'x' or (y == 0 and x > 0):
+            if (r[0] == 'x' and x != 0) or y == 0:
                 self.pos[1] += int(x)
             else:
                 self.pos[0] += int(y)
             player.set_dist()
-            os.system('cls')
-            player.display_map(map)
-            print('')
-            player.display(turn)
         if self.range >= self.distance:
             d = max(self.damage - player.block, 0)
             player.block = max(player.block - self.damage, 0)
@@ -241,16 +238,25 @@ class Player:
                 self.deck.cards.append(Card('Wound'))
                 shuffle(self.deck.cards)
 
-    def go(self, dir):
+    def go(self, dir, map):
         if self.move == 0:
             return
         if dir == 'w':
+            if map[self.pos[0] - 1, self.pos[1]] != '.':
+                return
             self.pos[0] -= 1
         if dir == 'a':
+            if map[self.pos[0], self.pos[1] - 1] != '.':
+                return
             self.pos[1] -= 1
         if dir == 's':
+            print(map[self.pos[0] + 1, self.pos[1]])
+            if map[self.pos[0] + 1, self.pos[1]] != '.':
+                return
             self.pos[0] += 1
         if dir == 'd':
+            if map[self.pos[0], self.pos[1] + 1] != '.':
+                return
             self.pos[1] += 1
         self.move -= 1
 
@@ -276,16 +282,34 @@ class Player:
                 f'Health: {self.enemies[s].health} ',
                 f'Damage: {self.enemies[s].damage} ',
                 f'Range: {self.enemies[s].range} ',
-                f'Move: {self.enemis[s].move}'
+                f'Move: {self.enemies[s].move}'
                 )
 
     def display_map(self, map):
-        map.fill('.')
+        if self.pos[0]+6 > len(map):
+            map = np.vstack((map, [['.']*len(map[0])]))
+        if self.pos[0]-5 < 0:
+            map = np.vstack(([['.']*len(map[0])], map))
+            self.pos[0] += 1
+            for e in range(len(self.enemies)):
+                self.enemies[e].pos[0] += 1
+        if self.pos[1]+6 > len(map[0]):
+            map = np.hstack((map, np.array(['.']*len(map))[:,np.newaxis]))
+        if self.pos[1]-5 < 0:
+            map = np.hstack((np.array(['.']*len(map))[:,np.newaxis], map))
+            self.pos[1] += 1
+            for e in range(len(self.enemies)):
+                self.enemies[e].pos[1] += 1
+        
+        map = np.where(map == 'P', '.', map)
         map[self.pos[0], self.pos[1]] = 'P'
         for e in range(len(self.enemies)):
-            map[self.enemies[e].pos[0], self.enemies[e].pos[1]] = e + 1
-        for el in map:
+            map = np.where(map == f'{e + 1}', '.', map)
+            map[self.enemies[e].pos[0], self.enemies[e].pos[1]] = f'{e + 1}'
+
+        for el in map[self.pos[0]-5:self.pos[0]+6,self.pos[1]-5:self.pos[1]+6]:
             print(' '*12 + ' '.join(el.astype(str)))
+        return map
 
     def display(self, turn):
         print(
@@ -311,6 +335,8 @@ class Player:
 if __name__ == '__main__':
     p = Player()
     map = np.empty([11, 11], str)
+    map.fill('.')
+    map[1:3, 7:9] = '#'
     turn = 0
     show_skills = False
     show_enemies = False
@@ -323,8 +349,8 @@ if __name__ == '__main__':
         p.refresh_skills()
         p.refresh_stats()
         while not p.is_dead():
-            os.system('cls')
-            p.display_map(map)
+            # os.system('cls')
+            map = p.display_map(map)
             print('')
             p.display(turn)
             if show_skills:
@@ -359,7 +385,7 @@ if __name__ == '__main__':
                         p.damage = 0
                         p.range = 1
             if i[0] in 'wasd':
-                p.go(i[0])
+                p.go(i[0], map)
                 p.set_dist()
     if i[0] != 'q':
         os.system('cls')
